@@ -17,13 +17,26 @@ export const administracaoMock = {
   saldo: 200000,
 };
 
-export const administracaoMock = {
-  contratado: 200000,
-  realizadoAndre: 45000,
-  realizadoMarcos: 30000,
-  realizadoTotal: 75000,
-  saldo: 125000,
-};
+export function calcularResumosMensais(lancamentos: Lancamento[]): ResumoMensal[] {
+  const mesesMap = new Map<string, { encaixes: number; desencaixes: number }>();
+
+  lancamentos.forEach((l) => {
+    const current = mesesMap.get(l.mes) || { encaixes: 0, desencaixes: 0 };
+    current.encaixes += l.encaixes;
+    current.desencaixes += l.desencaixes;
+    mesesMap.set(l.mes, current);
+  });
+
+  const meses = Array.from(mesesMap.keys()).sort();
+  let acumulado = 0;
+
+  return meses.map((mes) => {
+    const data = mesesMap.get(mes)!;
+    const saldoMes = data.encaixes + data.desencaixes;
+    acumulado += saldoMes;
+    return { mes, encaixes: data.encaixes, desencaixes: data.desencaixes, saldoMes, posicaoCaixa: acumulado };
+  });
+}
 
 export const MESES_PT: Record<string, string> = {
   "01": "Janeiro", "02": "Fevereiro", "03": "Março", "04": "Abril",
