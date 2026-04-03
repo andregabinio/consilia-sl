@@ -3,34 +3,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { lancamentosMock, calcularResumosMensais, formatCurrency, formatMes, maoDeObraMock, administracaoMock, MESES_PT } from "@/data/mockData";
+import { lancamentosMock, calcularResumosMensais, formatCurrency, formatMes, formatDate, MESES_PT } from "@/data/mockData";
 import { Mail, FileDown, FileText } from "lucide-react";
 
 export default function Relatorio() {
   const meses = useMemo(() => [...new Set(lancamentosMock.map(l => l.mes))].sort(), []);
+  const resumos = useMemo(() => calcularResumosMensais(lancamentosMock), []);
   const [selectedMes, setSelectedMes] = useState(meses[meses.length - 1] || "");
   const [showEmail, setShowEmail] = useState(false);
 
   const lancMes = lancamentosMock.filter(l => l.mes === selectedMes);
-  const resumo = calcularResumosMensais(lancamentosMock).find(r => r.mes === selectedMes);
+  const resumoAtual = resumos.find(r => r.mes === selectedMes);
+  const saldoAtual = resumos.length > 0 ? resumos[resumos.length - 1].posicaoCaixa : 0;
   const [ano, mesNum] = selectedMes.split("-");
   const mesExtenso = MESES_PT[mesNum] || "";
-
-  // Modalidade breakdown
-  const modalidades = useMemo(() => {
-    const map: Record<string, number> = {};
-    lancMes.forEach(l => { if (l.desencaixes < 0) map[l.modalidade] = (map[l.modalidade] || 0) + Math.abs(l.desencaixes); });
-    const total = Object.values(map).reduce((a, b) => a + b, 0);
-    return Object.entries(map).map(([nome, valor]) => ({ nome, valor, pct: total > 0 ? ((valor / total) * 100).toFixed(1) : "0" }));
-  }, [lancMes]);
-
-  // Doc stats
-  const docStats = useMemo(() => {
-    const nfOk = lancMes.filter(l => l.notaFiscal === "OK").length;
-    const cpOk = lancMes.filter(l => l.comprovante === "OK").length;
-    const orOk = lancMes.filter(l => l.orcamento === "OK").length;
-    return { nfOk, nfPend: lancMes.length - nfOk, cpOk, cpPend: lancMes.length - cpOk, orOk, orPend: lancMes.length - orOk };
-  }, [lancMes]);
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -82,7 +68,7 @@ CAU A116190-3
               <p className="text-xs text-muted-foreground mb-2">Anexos gerados automaticamente:</p>
               <div className="space-y-1">
                 <Badge variant="secondary" className="text-xs">📊 Planilha_{mesExtenso}_{ano}.xlsx</Badge>
-                <Badge variant="secondary" className="text-xs ml-2">📄 Relatorio_{mesExtenso}_{ano}.pdf</Badge>
+                <Badge variant="secondary" className="text-xs ml-2">📄 Resumo_{mesExtenso}_{ano}.pdf</Badge>
                 <Badge variant="secondary" className="text-xs ml-2">📁 Documentos_{mesExtenso}_{ano}.zip</Badge>
               </div>
             </div>
@@ -94,90 +80,111 @@ CAU A116190-3
         </Card>
       )}
 
-      {/* Report Preview */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Relatório Gerencial — {mesExtenso}/{ano}</CardTitle>
-          <p className="text-xs text-muted-foreground">Planilha Casa São Lourenço • Emissão: {new Date().toLocaleDateString("pt-BR")}</p>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Totals */}
-          {resumo && (
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <StatBox label="Encaixes" value={formatCurrency(resumo.encaixes)} />
-              <StatBox label="Desencaixes" value={formatCurrency(resumo.desencaixes)} />
-              <StatBox label="Saldo do Período" value={formatCurrency(resumo.saldoMes)} />
-              <StatBox label="Posição do Caixa" value={formatCurrency(resumo.posicaoCaixa)} />
-            </div>
-          )}
+      {/* PDF Preview — Client-facing monthly summary */}
+      <Card className="overflow-hidden">
+        <div className="bg-primary px-8 py-6">
+          <h2 className="text-primary-foreground text-xl font-bold tracking-wide">PLANILHA CASA SÃO LOURENÇO</h2>
+          <p className="text-primary-foreground/70 text-sm mt-1">Atualização: {new Date().toLocaleDateString("pt-BR")}</p>
+        </div>
 
-          {/* Modalidades */}
+        <CardContent className="p-8 space-y-8">
+          {/* Saldo Disponível */}
+          <div className="text-center py-6 border border-border rounded-lg bg-muted/30">
+            <p className="text-xs text-muted-foreground uppercase tracking-editorial mb-1">Saldo Disponível Atual</p>
+            <p className="text-3xl font-bold text-primary tracking-tight">{formatCurrency(saldoAtual)}</p>
+          </div>
+
+          {/* Resumo dos meses anteriores */}
           <div>
-            <h4 className="text-sm font-semibold mb-2">Desencaixes por Modalidade</h4>
-            <div className="grid grid-cols-3 gap-3">
-              {modalidades.map(m => (
-                <div key={m.nome} className="bg-muted/50 rounded-lg p-3 text-center">
-                  <p className="text-xs text-muted-foreground">{m.nome}</p>
-                  <p className="font-bold text-sm">{formatCurrency(m.valor)}</p>
-                  <Badge variant="secondary" className="text-[10px] mt-1">{m.pct}%</Badge>
-                </div>
-              ))}
+            <h3 className="text-sm font-semibold uppercase tracking-editorial text-muted-foreground mb-4">Resumo por Mês</h3>
+            <div className="space-y-2">
+              {resumos.map(r => {
+                const [rAno, rMes] = r.mes.split("-");
+                const rMesNome = MESES_PT[rMes];
+                const isSelected = r.mes === selectedMes;
+                return (
+                  <div key={r.mes} className={`rounded-lg p-4 ${isSelected ? 'bg-primary/5 border border-primary/20' : 'bg-muted/30'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold">{rMesNome}/{rAno}</span>
+                      {isSelected && <Badge variant="secondary" className="text-[10px]">Mês corrente</Badge>}
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-xs text-muted-foreground">Total Encaixe e Desencaixe</span>
+                        <p className={`font-semibold tabular-nums ${r.saldoMes >= 0 ? 'text-success' : 'text-destructive'}`}>
+                          {formatCurrency(r.saldoMes)}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-muted-foreground">Posição do Caixa</span>
+                        <p className="font-semibold tabular-nums">{formatCurrency(r.posicaoCaixa)}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
-          {/* Documentation */}
+          {/* Tabela detalhada do mês corrente */}
           <div>
-            <h4 className="text-sm font-semibold mb-2">Documentação</h4>
-            <div className="grid grid-cols-3 gap-3">
-              <DocStat label="Nota Fiscal" ok={docStats.nfOk} pend={docStats.nfPend} />
-              <DocStat label="Comprovante" ok={docStats.cpOk} pend={docStats.cpPend} />
-              <DocStat label="Orçamento" ok={docStats.orOk} pend={docStats.orPend} />
-            </div>
-          </div>
-
-          {/* Mão de Obra */}
-          <div>
-            <h4 className="text-sm font-semibold mb-2">Mão de Obra — Marcos Noal</h4>
-            <div className="grid grid-cols-3 gap-3">
-              <StatBox label="Contratado" value={formatCurrency(maoDeObraMock.contratado)} />
-              <StatBox label="Realizado" value={formatCurrency(maoDeObraMock.realizado)} />
-              <StatBox label="Saldo" value={formatCurrency(maoDeObraMock.saldo)} />
-            </div>
-          </div>
-
-          {/* Administração */}
-          <div>
-            <h4 className="text-sm font-semibold mb-2">Administração</h4>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <StatBox label="Contratado" value={formatCurrency(administracaoMock.contratado)} />
-              <StatBox label="André" value={formatCurrency(administracaoMock.realizadoAndre)} />
-              <StatBox label="Marcos" value={formatCurrency(administracaoMock.realizadoMarcos)} />
-              <StatBox label="Saldo" value={formatCurrency(administracaoMock.saldo)} />
+            <h3 className="text-sm font-semibold uppercase tracking-editorial text-muted-foreground mb-4">
+              Detalhamento — {mesExtenso}/{ano}
+            </h3>
+            <div className="overflow-x-auto border border-border rounded-lg">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/50 border-b border-border">
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs">Data Pedido</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs">Fornecedor</th>
+                    <th className="text-right px-4 py-2.5 font-medium text-muted-foreground text-xs">Encaixes</th>
+                    <th className="text-right px-4 py-2.5 font-medium text-muted-foreground text-xs">Desencaixes</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs">Dt. Pgto</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs">Pagamento</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs">Modalidade</th>
+                    <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs">Observações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lancMes.map(l => (
+                    <tr key={l.id} className="border-b border-border/50 hover:bg-muted/20">
+                      <td className="px-4 py-2 text-xs">{formatDate(l.dataPedido)}</td>
+                      <td className="px-4 py-2 text-xs font-medium">{l.fornecedor}</td>
+                      <td className="px-4 py-2 text-xs text-right text-success font-medium tabular-nums">
+                        {l.encaixes > 0 ? formatCurrency(l.encaixes) : "—"}
+                      </td>
+                      <td className="px-4 py-2 text-xs text-right text-destructive font-medium tabular-nums">
+                        {l.desencaixes < 0 ? formatCurrency(l.desencaixes) : "—"}
+                      </td>
+                      <td className="px-4 py-2 text-xs text-muted-foreground">{formatDate(l.dataPagamento)}</td>
+                      <td className="px-4 py-2 text-xs text-muted-foreground">{l.pagamento}</td>
+                      <td className="px-4 py-2 text-xs">
+                        <Badge variant="secondary" className="text-[10px]">{l.modalidade}</Badge>
+                      </td>
+                      <td className="px-4 py-2 text-xs text-muted-foreground">{l.observacoes || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                {resumoAtual && (
+                  <tfoot>
+                    <tr className="bg-muted/40 font-semibold border-t border-border">
+                      <td className="px-4 py-2.5 text-xs" colSpan={2}>Total Encaixe e Desencaixe</td>
+                      <td className="px-4 py-2.5 text-xs text-right text-success tabular-nums">{formatCurrency(resumoAtual.encaixes)}</td>
+                      <td className="px-4 py-2.5 text-xs text-right text-destructive tabular-nums">{formatCurrency(resumoAtual.desencaixes)}</td>
+                      <td colSpan={4}></td>
+                    </tr>
+                    <tr className="bg-primary/5 font-bold">
+                      <td className="px-4 py-2.5 text-xs" colSpan={2}>Posição do Caixa</td>
+                      <td className="px-4 py-2.5 text-xs text-right tabular-nums" colSpan={2}>{formatCurrency(resumoAtual.posicaoCaixa)}</td>
+                      <td colSpan={4}></td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
             </div>
           </div>
         </CardContent>
       </Card>
-    </div>
-  );
-}
-
-function StatBox({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-muted/50 rounded-lg p-3">
-      <p className="text-[11px] text-muted-foreground uppercase tracking-wide">{label}</p>
-      <p className="text-sm font-bold">{value}</p>
-    </div>
-  );
-}
-
-function DocStat({ label, ok, pend }: { label: string; ok: number; pend: number }) {
-  return (
-    <div className="bg-muted/50 rounded-lg p-3">
-      <p className="text-[11px] text-muted-foreground">{label}</p>
-      <div className="flex gap-2 mt-1">
-        <Badge variant="outline" className="status-ok text-[10px]">OK: {ok}</Badge>
-        <Badge variant="outline" className="status-missing text-[10px]">Pend: {pend}</Badge>
-      </div>
     </div>
   );
 }
