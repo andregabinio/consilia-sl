@@ -43,7 +43,7 @@ export default function Dashboard() {
         />
         <KpiCard
           title="Última Atualização"
-          value="28/06/2024"
+          value="—"
           icon={<Clock className="w-5 h-5" />}
           variant="muted"
         />
