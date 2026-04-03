@@ -1,45 +1,14 @@
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Upload, FileCheck, AlertTriangle, Link2 } from "lucide-react";
-import { formatCurrency } from "@/data/mockData";
-
-interface ExtratoItem {
-  id: string;
-  data: string;
-  historico: string;
-  favorecido: string;
-  valor: number;
-  status: "auto" | "manual" | "pendente";
-  parId?: string;
-}
-
-interface PlanilhaItem {
-  id: string;
-  fornecedor: string;
-  valor: number;
-  data: string;
-  status: "auto" | "manual" | "pendente" | "nao-encontrado";
-  parId?: string;
-}
-
-// Mock data for demo
-const extratoMock: ExtratoItem[] = [
-  { id: "e1", data: "10/01/2024", historico: "DEB PIX CHAVE", favorecido: "MARCOS NOAL", valor: -18500, status: "auto", parId: "p1" },
-  { id: "e2", data: "15/01/2024", historico: "PAG BOLETO IBC", favorecido: "LEROY MERLIN", valor: -3250, status: "auto", parId: "p3" },
-  { id: "e3", data: "20/01/2024", historico: "PAG BOLETO IBC", favorecido: "ELETRO CENTER", valor: -4780, status: "pendente" },
-  { id: "e4", data: "28/01/2024", historico: "PAG LUZ/GAS IBC", favorecido: "COPEL", valor: -450, status: "auto", parId: "p5" },
-  { id: "e5", data: "08/01/2024", historico: "CRED PIX CHAVE", favorecido: "ROBERTO MENIN", valor: 50000, status: "auto", parId: "p2" },
-];
-
-const planilhaMock: PlanilhaItem[] = [
-  { id: "p1", fornecedor: "Marcos Noal", valor: -18500, data: "10/01/2024", status: "auto", parId: "e1" },
-  { id: "p2", fornecedor: "Roberto Menin", valor: 50000, data: "08/01/2024", status: "auto", parId: "e5" },
-  { id: "p3", fornecedor: "Leroy Merlin", valor: -3250, data: "15/01/2024", status: "auto", parId: "e2" },
-  { id: "p4", fornecedor: "Eletro Center", valor: -4780, data: "20/01/2024", status: "nao-encontrado" },
-  { id: "p5", fornecedor: "Copel", valor: -450, data: "28/01/2024", status: "auto", parId: "e4" },
-];
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Upload, FileCheck, Link2, XCircle, Plus, AlertTriangle } from "lucide-react";
+import { formatCurrency, lancamentosMock, formatDate } from "@/data/mockData";
+import { Lancamento } from "@/types/financeiro";
+import ConciliacaoLista from "@/components/conciliacao/ConciliacaoLista";
+import ConciliacaoResumo from "@/components/conciliacao/ConciliacaoResumo";
+import { matchExtrato, ExtratoItem, PlanilhaItem, ConfidenceLevel } from "@/lib/conciliacao";
 
 export default function Conciliacao() {
   const [uploaded, setUploaded] = useState(false);
@@ -47,31 +16,54 @@ export default function Conciliacao() {
   const [planilha, setPlanilha] = useState<PlanilhaItem[]>([]);
   const [selectedExtrato, setSelectedExtrato] = useState<string | null>(null);
   const [selectedPlanilha, setSelectedPlanilha] = useState<string | null>(null);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
 
   const handleUpload = () => {
-    // Simulate PDF parsing
-    setExtrato(extratoMock);
-    setPlanilha(planilhaMock);
+    // Simulate PDF parsing — in production, parse with pdf.js
+    const { extrato: ext, planilha: plan } = matchExtrato(lancamentosMock);
+    setExtrato(ext);
+    setPlanilha(plan);
     setUploaded(true);
   };
 
-  const handleConciliarPar = () => {
+  const handleConciliarPar = useCallback(() => {
     if (!selectedExtrato || !selectedPlanilha) return;
-    setExtrato(prev => prev.map(e => e.id === selectedExtrato ? { ...e, status: "manual" as const, parId: selectedPlanilha } : e));
-    setPlanilha(prev => prev.map(p => p.id === selectedPlanilha ? { ...p, status: "manual" as const, parId: selectedExtrato } : p));
+    setExtrato(prev => prev.map(e =>
+      e.id === selectedExtrato ? { ...e, status: "manual", confianca: "alta", parId: selectedPlanilha } : e
+    ));
+    setPlanilha(prev => prev.map(p =>
+      p.id === selectedPlanilha ? { ...p, status: "manual", parId: selectedExtrato } : p
+    ));
     setSelectedExtrato(null);
     setSelectedPlanilha(null);
-  };
+  }, [selectedExtrato, selectedPlanilha]);
 
-  const conciliados = extrato.filter(e => e.status !== "pendente").length;
-  const pendentes = extrato.filter(e => e.status === "pendente").length;
+  const handleIgnorar = useCallback((id: string) => {
+    setExtrato(prev => prev.map(e =>
+      e.id === id ? { ...e, status: "ignorado" as any, confianca: "alta" as ConfidenceLevel } : e
+    ));
+  }, []);
 
-  const statusClass = (s: string) => {
-    if (s === "auto") return "conciliado-auto";
-    if (s === "manual") return "conciliado-manual";
-    if (s === "nao-encontrado") return "nao-encontrado-extrato";
-    return "nao-conciliado";
-  };
+  const handleConfirmar = useCallback((extratoId: string, planilhaId: string) => {
+    setExtrato(prev => prev.map(e =>
+      e.id === extratoId ? { ...e, status: "auto", confianca: "alta", parId: planilhaId } : e
+    ));
+    setPlanilha(prev => prev.map(p =>
+      p.id === planilhaId ? { ...p, status: "auto", parId: extratoId } : p
+    ));
+  }, []);
+
+  const stats = useMemo(() => {
+    const total = extrato.length;
+    const autoConc = extrato.filter(e => e.status === "auto").length;
+    const aguardando = extrato.filter(e => e.confianca === "media" && e.status === "pendente").length;
+    const manuais = extrato.filter(e => (e.confianca === "baixa" || e.confianca === "manual") && e.status === "pendente").length;
+    const ignorados = extrato.filter(e => (e as any).status === "ignorado").length;
+    const conciliados = autoConc + extrato.filter(e => e.status === "manual").length + ignorados;
+    const somaExtrato = extrato.reduce((s, e) => s + e.valor, 0);
+    const somaPlanilha = planilha.reduce((s, p) => s + p.valor, 0);
+    return { total, autoConc, aguardando, manuais, conciliados, diferenca: somaExtrato - somaPlanilha };
+  }, [extrato, planilha]);
 
   if (!uploaded) {
     return (
@@ -95,27 +87,9 @@ export default function Conciliacao() {
 
   return (
     <div className="space-y-4 animate-fade-in">
-      {/* Summary */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Card><CardContent className="pt-4 pb-3 text-center">
-          <p className="text-xs text-muted-foreground">Total Extrato</p>
-          <p className="text-lg font-bold">{extrato.length}</p>
-        </CardContent></Card>
-        <Card><CardContent className="pt-4 pb-3 text-center">
-          <p className="text-xs text-muted-foreground">Conciliados</p>
-          <p className="text-lg font-bold text-success">{conciliados}</p>
-        </CardContent></Card>
-        <Card><CardContent className="pt-4 pb-3 text-center">
-          <p className="text-xs text-muted-foreground">Pendentes</p>
-          <p className="text-lg font-bold text-destructive">{pendentes}</p>
-        </CardContent></Card>
-        <Card><CardContent className="pt-4 pb-3 text-center">
-          <p className="text-xs text-muted-foreground">Diferença</p>
-          <p className="text-lg font-bold">{formatCurrency(0)}</p>
-        </CardContent></Card>
-      </div>
+      <ConciliacaoResumo stats={stats} />
 
-      {/* Manual conciliation */}
+      {/* Manual conciliation bar */}
       {selectedExtrato && selectedPlanilha && (
         <Card className="border-accent">
           <CardContent className="pt-3 pb-3 flex items-center justify-between">
@@ -129,81 +103,51 @@ export default function Conciliacao() {
 
       {/* Side by side */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <FileCheck className="w-4 h-4 text-primary" /> Extrato Bancário
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="divide-y divide-border/50">
-              {extrato.map(e => (
-                <div
-                  key={e.id}
-                  onClick={() => e.status === "pendente" && setSelectedExtrato(e.id === selectedExtrato ? null : e.id)}
-                  className={`px-4 py-3 text-sm cursor-pointer ${statusClass(e.status)} ${selectedExtrato === e.id ? "ring-2 ring-primary" : ""}`}
-                >
-                  <div className="flex justify-between">
-                    <span className="font-medium">{e.favorecido}</span>
-                    <span className={`font-semibold ${e.valor >= 0 ? "text-success" : "text-destructive"}`}>{formatCurrency(e.valor)}</span>
-                  </div>
-                  <div className="flex justify-between mt-1">
-                    <span className="text-xs text-muted-foreground">{e.data} • {e.historico}</span>
-                    <StatusLabel status={e.status} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <ConciliacaoLista
+          title="Extrato Bancário"
+          icon={<FileCheck className="w-4 h-4 text-primary" />}
+          items={extrato}
+          selectedId={selectedExtrato}
+          onSelect={(id) => {
+            const item = extrato.find(e => e.id === id);
+            if (item && item.status === "pendente") setSelectedExtrato(id === selectedExtrato ? null : id);
+          }}
+          onIgnorar={handleIgnorar}
+          onConfirmar={(extratoId) => {
+            const item = extrato.find(e => e.id === extratoId);
+            if (item?.sugestaoParId) handleConfirmar(extratoId, item.sugestaoParId);
+          }}
+          side="extrato"
+        />
+        <ConciliacaoLista
+          title="Planilha"
+          icon={<FileCheck className="w-4 h-4 text-accent" />}
+          items={planilha}
+          selectedId={selectedPlanilha}
+          onSelect={(id) => {
+            const item = planilha.find(p => p.id === id);
+            if (item && (item.status === "nao-encontrado" || item.status === "pendente")) {
+              setSelectedPlanilha(id === selectedPlanilha ? null : id);
+            }
+          }}
+          side="planilha"
+        />
+      </div>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2">
-              <FileCheck className="w-4 h-4 text-accent" /> Planilha
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="divide-y divide-border/50">
-              {planilha.map(p => (
-                <div
-                  key={p.id}
-                  onClick={() => (p.status === "nao-encontrado" || p.status === "pendente") && setSelectedPlanilha(p.id === selectedPlanilha ? null : p.id)}
-                  className={`px-4 py-3 text-sm cursor-pointer ${statusClass(p.status)} ${selectedPlanilha === p.id ? "ring-2 ring-primary" : ""}`}
-                >
-                  <div className="flex justify-between">
-                    <span className="font-medium">{p.fornecedor}</span>
-                    <span className={`font-semibold ${p.valor >= 0 ? "text-success" : "text-destructive"}`}>{formatCurrency(p.valor)}</span>
-                  </div>
-                  <div className="flex justify-between mt-1">
-                    <span className="text-xs text-muted-foreground">{p.data}</span>
-                    <StatusLabel status={p.status} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Actions */}
+      <div className="flex items-center gap-3">
+        <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setShowCreateDialog(true)}>
+          <Plus className="w-4 h-4" /> Criar Lançamento
+        </Button>
       </div>
 
       {/* Legend */}
       <div className="flex flex-wrap gap-3 text-xs">
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-success" /> Conciliado auto</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-warning" /> Conciliado manual</span>
-        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-destructive" /> Não encontrado na planilha</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-success" /> Confiança Alta (auto)</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-warning" /> Confiança Média</span>
+        <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-destructive" /> Conciliação Manual</span>
         <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-accent" /> Não encontrado no extrato</span>
       </div>
     </div>
   );
-}
-
-function StatusLabel({ status }: { status: string }) {
-  const labels: Record<string, { text: string; cls: string }> = {
-    auto: { text: "Auto", cls: "status-ok" },
-    manual: { text: "Manual", cls: "status-pending" },
-    pendente: { text: "Pendente", cls: "status-missing" },
-    "nao-encontrado": { text: "Não encontrado", cls: "status-missing" },
-  };
-  const s = labels[status] || labels.pendente;
-  return <Badge variant="outline" className={`text-[10px] ${s.cls}`}>{s.text}</Badge>;
 }
