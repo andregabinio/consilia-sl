@@ -35,8 +35,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         flex flex-col
       `}>
         <div className="flex items-center gap-3 px-5 py-6 border-b border-sidebar-border">
-          <div className="w-9 h-9 rounded bg-accent/20 flex items-center justify-center">
-            <Building2 className="w-5 h-5 text-accent" />
+          <div className="w-9 h-9 rounded flex items-center justify-center">
+            <img src={logoFeldman} alt="Feldman Construções" className="w-8 h-8 object-contain" />
           </div>
           <div>
             <h1 className="font-semibold text-sidebar-primary text-sm leading-tight tracking-wide">FELDMAN</h1>
