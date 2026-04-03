@@ -16,6 +16,9 @@ export default {
       fontFamily: {
         sans: ['Inter', 'sans-serif'],
       },
+      letterSpacing: {
+        'editorial': '0.08em',
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

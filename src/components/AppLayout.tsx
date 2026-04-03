@@ -33,17 +33,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0
         flex flex-col
       `}>
-        <div className="flex items-center gap-3 px-5 py-5 border-b border-sidebar-border">
-          <div className="w-9 h-9 rounded-lg bg-accent flex items-center justify-center">
-            <Building2 className="w-5 h-5 text-accent-foreground" />
+        <div className="flex items-center gap-3 px-5 py-6 border-b border-sidebar-border">
+          <div className="w-9 h-9 rounded bg-accent/20 flex items-center justify-center">
+            <Building2 className="w-5 h-5 text-accent" />
           </div>
           <div>
-            <h1 className="font-semibold text-sidebar-primary text-sm leading-tight">Casa São Lourenço</h1>
-            <p className="text-[11px] text-sidebar-muted">Controle Financeiro</p>
+            <h1 className="font-semibold text-sidebar-primary text-sm leading-tight tracking-wide">FELDMAN</h1>
+            <p className="text-[10px] text-sidebar-muted tracking-editorial uppercase">Construções</p>
           </div>
         </div>
 
-        <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
+        <nav className="flex-1 py-5 px-3 space-y-0.5 overflow-y-auto">
           {navItems.map(({ path, label, icon: Icon }) => {
             const active = location.pathname === path;
             return (
@@ -67,8 +67,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="px-5 py-4 border-t border-sidebar-border">
-          <p className="text-[11px] text-sidebar-muted">André Gabinio • Arquiteto</p>
-          <p className="text-[10px] text-sidebar-muted/60">CAU A116190-3</p>
+          <p className="text-[11px] text-sidebar-muted">Casa São Lourenço</p>
+          <p className="text-[10px] text-sidebar-muted/60">André Gabinio • CAU A116190-3</p>
         </div>
       </aside>
 
@@ -81,7 +81,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           >
             <Menu className="w-5 h-5" />
           </button>
-          <h2 className="text-lg font-semibold text-foreground">
+          <h2 className="text-lg font-semibold text-foreground tracking-tight">
             {navItems.find(n => n.path === location.pathname)?.label || "Dashboard"}
           </h2>
         </header>
