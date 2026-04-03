@@ -2,8 +2,9 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, FileText, TrendingUp, HardHat, FileCheck,
-  Upload, Mail, Menu, X, Building2
+  Upload, Mail, Menu, X
 } from "lucide-react";
+import logoFeldman from "@/assets/logo-feldman.png";
 
 const navItems = [
   { path: "/", label: "Dashboard", icon: LayoutDashboard },
