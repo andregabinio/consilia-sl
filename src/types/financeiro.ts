@@ -65,3 +65,49 @@ export interface Administracao {
   realizadoTotal: number;
   saldo: number;
 }
+
+// Tipos para conciliacao com Supabase
+export interface Upload {
+  id: string;
+  tipo: "extrato" | "comprovante";
+  nome_arquivo: string;
+  storage_path: string;
+  status: "pendente" | "processando" | "concluido" | "erro";
+  erro_msg: string | null;
+  created_at: string;
+}
+
+export interface ExtratoItemDB {
+  id: string;
+  upload_id: string;
+  data: string;
+  historico: string | null;
+  favorecido: string | null;
+  cpf_cnpj: string | null;
+  valor: number;
+  saldo: number | null;
+  nr_doc: string | null;
+}
+
+export interface ComprovanteDB {
+  id: string;
+  upload_id: string;
+  tipo_pagamento: string | null;
+  data: string;
+  valor: number;
+  favorecido: string | null;
+  cpf_cnpj: string | null;
+  banco: string | null;
+  id_transacao: string | null;
+  dados_brutos: Record<string, unknown> | null;
+}
+
+export interface ConciliacaoDB {
+  id: string;
+  extrato_item_id: string;
+  comprovante_id: string | null;
+  confianca: "alta" | "media" | "baixa";
+  metodo: "auto" | "manual";
+  criterios_match: Record<string, boolean> | null;
+  created_at: string;
+}
