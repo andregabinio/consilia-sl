@@ -25,7 +25,19 @@ export default function Conciliacao() {
 
   const FUNCTIONS_URL = import.meta.env.VITE_SUPABASE_URL + "/functions/v1";
 
-  // Upload files to Storage + create upload records + trigger processing
+  // Helper: convert File to base64
+  const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        resolve(result.split(",")[1]); // remove "data:...;base64," prefix
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+  // Create upload records + send PDF base64 to Edge Functions
   const handleProcessar = useCallback(async () => {
     if (extratoFiles.length === 0) return;
     setStage("processing");
@@ -38,20 +50,10 @@ export default function Conciliacao() {
     const uploadRecords: UploadType[] = [];
 
     for (const { file, tipo } of allFiles) {
-      const path = `${tipo}s/${Date.now()}-${file.name}`;
-
-      const { error: storageErr } = await supabase.storage
-        .from("documentos")
-        .upload(path, file, { contentType: "application/pdf" });
-
-      if (storageErr) {
-        console.error("Storage upload failed:", storageErr);
-        continue;
-      }
-
+      // Create upload record in DB
       const { data: uploadRow, error: dbErr } = await supabase
         .from("uploads")
-        .insert({ tipo, nome_arquivo: file.name, storage_path: path, status: "pendente" })
+        .insert({ tipo, nome_arquivo: file.name, storage_path: `direct/${file.name}`, status: "pendente" })
         .select()
         .single();
 
@@ -66,11 +68,13 @@ export default function Conciliacao() {
         setExtratoUploadId(uploadRow.id);
       }
 
+      // Convert file to base64 and send directly to Edge Function
+      const pdf_base64 = await fileToBase64(file);
       const fnName = tipo === "extrato" ? "processar-extrato" : "processar-comprovante";
       fetch(`${FUNCTIONS_URL}/${fnName}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ upload_id: uploadRow.id }),
+        body: JSON.stringify({ upload_id: uploadRow.id, pdf_base64 }),
       }).catch((err) => console.error(`Edge Function ${fnName} error:`, err));
     }
 
